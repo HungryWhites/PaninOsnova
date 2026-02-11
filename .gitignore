@@ -1,0 +1,33 @@
+# Зависимости (это мусор, его НЕ надо в репозиторий)
+node_modules/
+vendor/
+
+# Сборка и временные файлы
+dist/
+build/
+out/
+*.log
+*.cache
+.temp/
+
+# Файлы среды (пароли, ключи)
+.env
+.env.local
+.env.development.local
+.env.production.local
+
+# IDE и редакторы
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Тестовые отчеты
+coverage/
+.nyc_output/
+
+# Скрытые системные файлы (если есть)
+.gitignore  # !!! сам .gitignore не игнорируется

@@ -1,0 +1,27 @@
+{
+  "name": "express-auth-example",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "install:client": "cd client && npm install",
+    "install:server": "cd server && npm install",
+    "start:client": "cd client && npm start",
+    "start:server": "cd server && npm start",
+    "start": "concurrently --kill-others \"npm run start:client\" \"npm run start:server\"",
+    "postinstall": "concurrently \"npm run install:client\" \"npm run install:server\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dmitryweiner/express-auth-example.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/dmitryweiner/express-auth-example/issues"
+  },
+  "homepage": "https://github.com/dmitryweiner/express-auth-example#readme",
+  "devDependencies": {
+    "concurrently": "^7.5.0"
+  }
+}
