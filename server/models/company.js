@@ -59,6 +59,22 @@ const Company = (sequelize) =>
       allowNull: false,
       defaultValue: "base",
     },
+    bankName: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    bik: {
+      type: DataTypes.STRING(9),
+      allowNull: true,
+    },
+    corrAccount: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+    },
+    settlAccount: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+    },
   });
 
 module.exports = { Company };

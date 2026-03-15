@@ -62,6 +62,10 @@ userRouter.post("/", async (req, res, next) => {
       phone: company.phone,
       email: company.email,
       contactPerson: `${user.lastName} ${user.firstName} ${user.patronymic || ""}`.trim(),
+      bankName: company.bankName,
+      bik: company.bik,
+      corrAccount: company.corrAccount,
+      settlAccount: company.settlAccount,
     });
 
     const newUser = await addUser({

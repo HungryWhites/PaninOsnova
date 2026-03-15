@@ -157,6 +157,24 @@ export const API = {
       await errorHandler(response);
       return await response.json();
     },
+    cancel: async (id: number) => {
+      const response = await fetch(`${BASE_URL}/orders/${id}/cancel`, {
+        method: "PUT",
+        credentials: "include",
+      });
+      await errorHandler(response);
+      return await response.json();
+    },
+    edit: async (id: number, data: { items?: any[]; comment?: string }) => {
+      const response = await fetch(`${BASE_URL}/orders/${id}/edit`, {
+        method: "PUT",
+        credentials: "include",
+        headers: jsonHeaders,
+        body: JSON.stringify(data),
+      });
+      await errorHandler(response);
+      return await response.json();
+    },
   },
   admin: {
     getCompanies: async () => {
@@ -238,6 +256,13 @@ export const API = {
       await errorHandler(response);
       return await response.json();
     },
+  },
+  aiRecommendations: async () => {
+    const response = await fetch(`${BASE_URL}/products/ai-recommendations`, {
+      credentials: "include",
+    });
+    await errorHandler(response);
+    return await response.json();
   },
   aiSearch: async (query: string) => {
     const response = await fetch(`${BASE_URL}/products/ai-search`, {

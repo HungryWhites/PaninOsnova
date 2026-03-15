@@ -5,7 +5,7 @@ import { API, BASE_URL } from "../services/api";
 const AdminView = () => {
   const context: any = useOutletContext();
   const user = context?.user;
-  const [activeTab, setActiveTab] = useState('orders');
+  const [activeTab, setActiveTab] = useState('registrations');
   const [companies, setCompanies] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
@@ -15,6 +15,7 @@ const AdminView = () => {
   const [showProductForm, setShowProductForm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingId, setUploadingId] = useState<number | null>(null);
+  const [expandedCompany, setExpandedCompany] = useState<number | null>(null);
 
   const [productForm, setProductForm] = useState({
     name: '', slug: '', sku: '', description: '', specs: '',
@@ -26,7 +27,7 @@ const AdminView = () => {
     const load = async () => {
       setLoading(true);
       try {
-        if (activeTab === 'companies') {
+        if (activeTab === 'registrations' || activeTab === 'companies') {
           const data = await API.admin.getCompanies();
           setCompanies(Array.isArray(data) ? data : []);
         } else if (activeTab === 'orders') {
@@ -49,6 +50,14 @@ const AdminView = () => {
     try {
       await API.admin.updateCompany(id, { status: 'approved' });
       setCompanies(companies.map((c: any) => c.id === id ? { ...c, status: 'approved' } : c));
+    } catch (e) {}
+  };
+
+  const handleRejectCompany = async (id: number) => {
+    if (!window.confirm('Отклонить заявку на регистрацию?')) return;
+    try {
+      await API.admin.updateCompany(id, { status: 'rejected' });
+      setCompanies(companies.map((c: any) => c.id === id ? { ...c, status: 'rejected' } : c));
     } catch (e) {}
   };
 
@@ -158,13 +167,145 @@ const AdminView = () => {
         <aside className="admin-sidebar">
           <div className="card">
             <h3 style={{fontSize: 16, fontWeight: 700, color: 'var(--primary-dark)', marginBottom: 16, padding: '0 16px'}}>Администрирование</h3>
-            <button className={`admin-nav-item ${activeTab === 'orders' ? 'active' : ''}`} onClick={() => setActiveTab('orders')}>&#128230; Заказы</button>
-            <button className={`admin-nav-item ${activeTab === 'products' ? 'active' : ''}`} onClick={() => setActiveTab('products')}>&#128722; Товары</button>
-            <button className={`admin-nav-item ${activeTab === 'companies' ? 'active' : ''}`} onClick={() => setActiveTab('companies')}>&#127970; Компании</button>
+            <button className={`admin-nav-item ${activeTab === 'registrations' ? 'active' : ''}`} onClick={() => setActiveTab('registrations')}>{'\uD83D\uDCCB'} Регистрация</button>
+            <button className={`admin-nav-item ${activeTab === 'orders' ? 'active' : ''}`} onClick={() => setActiveTab('orders')}>{'\uD83D\uDCE6'} Заказы</button>
+            <button className={`admin-nav-item ${activeTab === 'products' ? 'active' : ''}`} onClick={() => setActiveTab('products')}>{'\uD83D\uDED2'} Товары</button>
+            <button className={`admin-nav-item ${activeTab === 'companies' ? 'active' : ''}`} onClick={() => setActiveTab('companies')}>{'\uD83C\uDFE2'} Компании</button>
           </div>
         </aside>
 
         <div className="admin-content">
+          {/* ===== REGISTRATIONS TAB ===== */}
+          {activeTab === 'registrations' && (
+            <div className="card" style={{padding: 28}}>
+              <div className="admin-table-header">
+                <h2 style={{fontSize: 20, fontWeight: 700}}>Заявки на регистрацию</h2>
+                <span style={{fontSize: 14, color: 'var(--text-secondary)'}}>
+                  {companies.filter((c: any) => c.status === 'pending').length} ожидают проверки
+                </span>
+              </div>
+              {loading ? <div className="loading-spinner"></div> : (() => {
+                const pending = companies.filter((c: any) => c.status === 'pending');
+                const processed = companies.filter((c: any) => c.status !== 'pending');
+                return pending.length === 0 && processed.length === 0 ? (
+                  <div className="empty-state"><div className="empty-state-icon">{'\uD83D\uDCCB'}</div><h3>Нет заявок</h3><p>Новые заявки на регистрацию появятся здесь</p></div>
+                ) : (
+                  <div>
+                    {pending.length > 0 && (
+                      <div style={{marginBottom: 24}}>
+                        <h3 style={{fontSize: 16, fontWeight: 600, color: '#FF9800', marginBottom: 12}}>{'\u23F3'} Ожидают проверки ({pending.length})</h3>
+                        {pending.map((c: any) => (
+                          <div key={c.id} className="card" style={{marginBottom: 12, border: '2px solid #FF9800', padding: 0, overflow: 'hidden'}}>
+                            <div
+                              style={{padding: '16px 20px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,152,0,0.05)'}}
+                              onClick={() => setExpandedCompany(expandedCompany === c.id ? null : c.id)}
+                            >
+                              <div>
+                                <div style={{fontWeight: 700, fontSize: 15}}>{c.companyName}</div>
+                                <div style={{fontSize: 12, color: 'var(--text-secondary)', marginTop: 2}}>
+                                  {c.companyType === 'ip' || c.companyType === 'IP' ? 'ИП' : 'ООО'} &bull; ИНН: {c.inn} &bull; {new Date(c.createdAt).toLocaleDateString('ru-RU')}
+                                </div>
+                              </div>
+                              <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+                                <span className="badge badge-warning">На модерации</span>
+                                <span style={{fontSize: 12, color: 'var(--text-secondary)'}}>{expandedCompany === c.id ? '\u25B2' : '\u25BC'}</span>
+                              </div>
+                            </div>
+                            {expandedCompany === c.id && (
+                              <div style={{padding: '0 20px 20px', borderTop: '1px solid var(--border)'}}>
+                                <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginTop: 16}}>
+                                  <div>
+                                    <h4 style={{fontSize: 14, fontWeight: 700, color: 'var(--primary-dark)', marginBottom: 10}}>{'\uD83C\uDFE2'} Реквизиты компании</h4>
+                                    <div style={{fontSize: 13, lineHeight: 2, color: 'var(--text-secondary)'}}>
+                                      <div><strong>Название:</strong> {c.companyName}</div>
+                                      <div><strong>Тип:</strong> {c.companyType === 'ip' || c.companyType === 'IP' ? 'ИП' : 'ООО'}</div>
+                                      <div><strong>ИНН:</strong> <span style={{fontFamily: 'monospace', background: 'var(--bg-main)', padding: '2px 6px', borderRadius: 4}}>{c.inn}</span></div>
+                                      {c.kpp && <div><strong>КПП:</strong> <span style={{fontFamily: 'monospace', background: 'var(--bg-main)', padding: '2px 6px', borderRadius: 4}}>{c.kpp}</span></div>}
+                                      {c.ogrn && <div><strong>ОГРН:</strong> <span style={{fontFamily: 'monospace'}}>{c.ogrn}</span></div>}
+                                      {c.legalAddress && <div><strong>Юр. адрес:</strong> {c.legalAddress}</div>}
+                                      {c.actualAddress && <div><strong>Факт. адрес:</strong> {c.actualAddress}</div>}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <h4 style={{fontSize: 14, fontWeight: 700, color: 'var(--primary-dark)', marginBottom: 10}}>{'\uD83C\uDFE6'} Банковские реквизиты</h4>
+                                    <div style={{fontSize: 13, lineHeight: 2, color: 'var(--text-secondary)'}}>
+                                      {c.bankName ? <div><strong>Банк:</strong> {c.bankName}</div> : <div style={{color: '#999'}}>Банк не указан</div>}
+                                      {c.bik && <div><strong>БИК:</strong> <span style={{fontFamily: 'monospace'}}>{c.bik}</span></div>}
+                                      {c.corrAccount && <div><strong>Корр. счёт:</strong> <span style={{fontFamily: 'monospace', fontSize: 12}}>{c.corrAccount}</span></div>}
+                                      {c.settlAccount && <div><strong>Расч. счёт:</strong> <span style={{fontFamily: 'monospace', fontSize: 12}}>{c.settlAccount}</span></div>}
+                                    </div>
+                                  </div>
+                                </div>
+                                {c.Users && c.Users.length > 0 && (
+                                  <div style={{marginTop: 16}}>
+                                    <h4 style={{fontSize: 14, fontWeight: 700, color: 'var(--primary-dark)', marginBottom: 10}}>{'\uD83D\uDC64'} Контактное лицо</h4>
+                                    <div style={{fontSize: 13, lineHeight: 2, color: 'var(--text-secondary)'}}>
+                                      <div><strong>ФИО:</strong> {c.Users[0].lastName} {c.Users[0].firstName} {c.Users[0].patronymic || ''}</div>
+                                      <div><strong>Email:</strong> {c.Users[0].email}</div>
+                                      <div><strong>Телефон:</strong> {c.Users[0].phone}</div>
+                                    </div>
+                                  </div>
+                                )}
+                                <div style={{marginTop: 16, padding: '12px 16px', background: 'rgba(33,150,243,0.06)', borderRadius: 8}}>
+                                  <h4 style={{fontSize: 13, fontWeight: 700, color: '#2196F3', marginBottom: 8}}>{'\uD83D\uDD0D'} Проверить компанию:</h4>
+                                  <div style={{display: 'flex', gap: 8, flexWrap: 'wrap'}}>
+                                    <a href={`https://www.rusprofile.ru/search?query=${c.inn}`} target="_blank" rel="noreferrer"
+                                      style={{fontSize: 12, padding: '4px 12px', background: '#2196F3', color: 'white', borderRadius: 4, textDecoration: 'none'}}>
+                                      Rusprofile
+                                    </a>
+                                    <a href={`https://egrul.nalog.ru/index.html?query=${c.inn}`} target="_blank" rel="noreferrer"
+                                      style={{fontSize: 12, padding: '4px 12px', background: '#4CAF50', color: 'white', borderRadius: 4, textDecoration: 'none'}}>
+                                      ФНС ЕГРЮЛ
+                                    </a>
+                                    <a href={`https://zachestnyibiznes.ru/company/ul/${c.inn}`} target="_blank" rel="noreferrer"
+                                      style={{fontSize: 12, padding: '4px 12px', background: '#FF9800', color: 'white', borderRadius: 4, textDecoration: 'none'}}>
+                                      За честный бизнес
+                                    </a>
+                                  </div>
+                                </div>
+                                <div style={{marginTop: 16, display: 'flex', gap: 12}}>
+                                  <button className="btn btn-primary" style={{padding: '10px 28px'}} onClick={() => handleApproveCompany(c.id)}>
+                                    {'\u2705'} Подтвердить регистрацию
+                                  </button>
+                                  <button className="btn btn-outline" style={{padding: '10px 28px', color: '#F44336', borderColor: '#F44336'}} onClick={() => handleRejectCompany(c.id)}>
+                                    {'\u274C'} Отклонить
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {processed.length > 0 && (
+                      <div>
+                        <h3 style={{fontSize: 16, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 12}}>Обработанные заявки ({processed.length})</h3>
+                        <table className="orders-table" style={{fontSize: 13}}>
+                          <thead><tr><th>Компания</th><th>ИНН</th><th>Контакт</th><th>Статус</th><th>Дата</th></tr></thead>
+                          <tbody>
+                            {processed.map((c: any) => (
+                              <tr key={c.id}>
+                                <td style={{fontWeight: 600}}>{c.companyName}</td>
+                                <td style={{fontFamily: 'monospace'}}>{c.inn}</td>
+                                <td>{c.contactPerson}<br/><span style={{fontSize: 11, color: 'var(--text-secondary)'}}>{c.email}</span></td>
+                                <td>
+                                  <span className={`badge ${c.status === 'approved' ? 'badge-success' : 'badge-danger'}`}>
+                                    {c.status === 'approved' ? 'Подтверждена' : 'Отклонена'}
+                                  </span>
+                                </td>
+                                <td>{new Date(c.createdAt).toLocaleDateString('ru-RU')}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
           {/* ===== ORDERS TAB ===== */}
           {activeTab === 'orders' && (
             <div className="card" style={{padding: 28}}>

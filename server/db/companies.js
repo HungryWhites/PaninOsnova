@@ -15,12 +15,16 @@ module.exports = {
       contactPerson: data.contactPerson,
       status: "pending",
       priceCategory: "base",
+      bankName: data.bankName || null,
+      bik: data.bik || null,
+      corrAccount: data.corrAccount || null,
+      settlAccount: data.settlAccount || null,
     });
   },
   getCompanyById: async (id) => await getDb().models.Company.findByPk(id),
   getCompanyByInn: async (inn) =>
     await getDb().models.Company.findOne({ where: { inn } }),
-  getAllCompanies: async () => await getDb().models.Company.findAll(),
+  getAllCompanies: async () => await getDb().models.Company.findAll({ include: "Users", order: [["createdAt", "DESC"]] }),
   updateCompany: async (id, data) => {
     const company = await getDb().models.Company.findByPk(id);
     if (company) {

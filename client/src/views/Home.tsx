@@ -5,6 +5,7 @@ import { API, BASE_URL } from "../services/api";
 function Home() {
   const [categories, setCategories] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [recEngine, setRecEngine] = useState<string>('');
   const [aiQuery, setAiQuery] = useState("");
   const [aiResults, setAiResults] = useState<any[] | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -14,9 +15,17 @@ function Home() {
       try {
         const cats = await API.categories.getAll();
         setCategories(cats);
-        const prods = await API.products.getAll({ limit: 8 });
-        setProducts(prods.products || []);
-      } catch (e) {}
+        // Load AI-powered recommendations
+        const rec = await API.aiRecommendations();
+        setProducts(rec.products || []);
+        setRecEngine(rec.engine || '');
+      } catch (e) {
+        // Fallback: load first 8 products
+        try {
+          const prods = await API.products.getAll({ limit: 8 });
+          setProducts(prods.products || []);
+        } catch (e2) {}
+      }
     };
     load();
   }, []);
@@ -201,8 +210,8 @@ function Home() {
       <div className="container">
         <div className="section-header">
           <div>
-            <h2>Популярные товары</h2>
-            <p>Самые востребованные позиции нашего каталога</p>
+            <h2>{recEngine === 'deepseek' ? '\uD83E\uDD16 Рекомендации ИИ' : 'Популярные товары'}</h2>
+            <p>{recEngine === 'deepseek' ? 'Искусственный интеллект подобрал лучшие товары из нашего каталога' : 'Самые востребованные позиции нашего каталога'}</p>
           </div>
           <Link to="/catalog" className="btn btn-outline">Весь каталог</Link>
         </div>

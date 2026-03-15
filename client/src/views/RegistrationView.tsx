@@ -42,12 +42,17 @@ const RegistrationView = () => {
     setLoading(true);
     try {
       await API.user.register({
-        companyType, companyName: form.companyName, inn: form.inn, kpp: form.kpp,
-        ogrn: form.ogrn, legalAddress: form.legalAddress, actualAddress: form.actualAddress,
-        bankName: form.bankName, bik: form.bik, corrAccount: form.corrAccount, settlAccount: form.settlAccount,
-        firstName: form.firstName, lastName: form.lastName, patronymic: form.patronymic,
-        position: form.position, email: form.email, phone: form.phone,
-        login: form.login, password: form.password,
+        company: {
+          companyType, companyName: form.companyName, inn: form.inn, kpp: form.kpp,
+          ogrn: form.ogrn, legalAddress: form.legalAddress, actualAddress: form.actualAddress,
+          bankName: form.bankName, bik: form.bik, corrAccount: form.corrAccount, settlAccount: form.settlAccount,
+          phone: form.phone, email: form.email,
+        },
+        user: {
+          firstName: form.firstName, lastName: form.lastName, patronymic: form.patronymic,
+          position: form.position, email: form.email, phone: form.phone,
+          login: form.login, password: form.password,
+        },
       });
       setSuccess(true);
     } catch (e: any) {

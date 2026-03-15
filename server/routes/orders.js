@@ -104,4 +104,90 @@ ordersRouter.put("/:id/status", async (req, res, next) => {
   }
 });
 
+// User edits own order (only if new or awaiting_contact)
+ordersRouter.put("/:id/edit", async (req, res, next) => {
+  try {
+    const token = req.cookies.token;
+    const userId = await checkAuth(token);
+    const order = await getOrderById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ message: "Заказ не найден" });
+    }
+    if (order.UserId !== userId) {
+      return res.status(403).json({ message: "Это не ваш заказ" });
+    }
+    if (!["new", "awaiting_contact"].includes(order.status)) {
+      return res.status(400).json({ message: "Заказ нельзя изменить в текущем статусе" });
+    }
+
+    const { items, comment } = req.body;
+    const { getDb } = require("../db/db");
+    const OrderItem = getDb().models.OrderItem;
+
+    // Update comment if provided
+    if (comment !== undefined) {
+      order.comment = comment;
+    }
+
+    // Update items if provided
+    if (items && Array.isArray(items)) {
+      // Delete removed items, update quantities
+      for (const oi of order.OrderItems) {
+        const updated = items.find((i) => i.id === oi.id);
+        if (!updated || updated.quantity <= 0) {
+          await oi.destroy();
+        } else if (updated.quantity !== oi.quantity) {
+          oi.quantity = updated.quantity;
+          await oi.save();
+        }
+      }
+
+      // Recalculate total
+      const remaining = await OrderItem.findAll({ where: { OrderId: order.id } });
+      if (remaining.length === 0) {
+        // If all items removed, cancel the order
+        order.status = "cancelled";
+        order.totalAmount = 0;
+        await order.save();
+        return res.status(200).json({ ok: true, message: "Все товары удалены, заказ отменён" });
+      }
+      let total = 0;
+      for (const r of remaining) {
+        total += r.price * r.quantity;
+      }
+      order.totalAmount = total;
+    }
+
+    await order.save();
+
+    // Return updated order
+    const updated = await getOrderById(order.id);
+    res.status(200).json(updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// User cancels own order (only if new or awaiting_contact)
+ordersRouter.put("/:id/cancel", async (req, res, next) => {
+  try {
+    const token = req.cookies.token;
+    const userId = await checkAuth(token);
+    const order = await getOrderById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ message: "Заказ не найден" });
+    }
+    if (order.UserId !== userId) {
+      return res.status(403).json({ message: "Это не ваш заказ" });
+    }
+    if (!["new", "awaiting_contact"].includes(order.status)) {
+      return res.status(400).json({ message: "Заказ нельзя отменить в текущем статусе" });
+    }
+    const updated = await updateOrderStatus(req.params.id, "cancelled");
+    res.status(200).json(updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = ordersRouter;
