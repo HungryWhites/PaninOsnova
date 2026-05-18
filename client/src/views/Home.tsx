@@ -130,7 +130,7 @@ function Home() {
             onChange={(e) => setAiQuery(e.target.value)}
           />
           <button className="btn btn-primary" type="submit" disabled={aiLoading} style={{whiteSpace: 'nowrap', padding: '14px 28px'}}>
-            {aiLoading ? 'Поиск...' : '&#128269; Найти'}
+            {aiLoading ? 'Поиск...' : '\uD83D\uDD0D Найти'}
           </button>
         </form>
 

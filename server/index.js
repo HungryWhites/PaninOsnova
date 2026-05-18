@@ -34,6 +34,12 @@ app.use(
 // Serve uploaded files statically
 app.use("/uploads", express.static(uploadsDir));
 
+// Serve invoices directory
+const invoicesDir = path.join(__dirname, "invoices");
+if (!fs.existsSync(invoicesDir)) {
+  fs.mkdirSync(invoicesDir, { recursive: true });
+}
+
 app.get("/", (req, res) => {
   res.status(200).json({ ok: true, name: "ПРОМСТРОЙ B2B API" });
 });

@@ -34,6 +34,14 @@ const Order = (sequelize) =>
       type: DataTypes.STRING,
       allowNull: true,
     },
+    invoicePath: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    invoiceSentAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
   });
 
 const OrderItem = (sequelize) =>

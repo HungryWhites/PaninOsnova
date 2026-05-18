@@ -36,7 +36,7 @@ userRouter.get("/", async (req, res, next) => {
 
 userRouter.post("/", async (req, res, next) => {
   try {
-    const { company, user } = req.body;
+    const { company, user, inviteToken } = req.body;
 
     const existingLogin = await getUserByLogin(user.login);
     if (existingLogin) {
@@ -46,6 +46,32 @@ userRouter.post("/", async (req, res, next) => {
     if (existingEmail) {
       throw new BadRequestError("Пользователь с таким email уже существует");
     }
+
+    // Invite-based registration (employee joining existing company)
+    if (inviteToken) {
+      const { getDb } = require("../db/db");
+      const invite = await getDb().models.Invite.findOne({ where: { token: inviteToken, status: "pending" } });
+      if (!invite) throw new BadRequestError("Приглашение недействительно или уже использовано");
+
+      const newUser = await addUser({
+        login: user.login,
+        email: user.email,
+        password: user.password,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        patronymic: user.patronymic,
+        phone: user.phone,
+        role: invite.role || "buyer",
+        companyId: invite.CompanyId,
+      });
+
+      invite.status = "accepted";
+      await invite.save();
+
+      return res.status(200).json({ ok: true, message: "Регистрация успешна! Вы добавлены в компанию." });
+    }
+
+    // Standard registration (new company)
     const existingInn = await getCompanyByInn(company.inn);
     if (existingInn) {
       throw new BadRequestError("Компания с таким ИНН уже зарегистрирована");

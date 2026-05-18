@@ -19,12 +19,14 @@ const initDb = async () => {
       require("../models/cartItem").CartItem,
       require("../models/order").Order,
       require("../models/order").OrderItem,
+      require("../models/invite").Invite,
+      require("../models/companyPrice").CompanyPrice,
     ];
     for (const model of models) {
       model(db);
     }
     connections(db);
-    await db.sync();
+    await db.sync({ alter: true });
   }
 };
 

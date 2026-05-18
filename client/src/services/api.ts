@@ -245,6 +245,61 @@ export const API = {
       });
       await errorHandler(response);
     },
+    generateInvoice: async (orderId: number) => {
+      const response = await fetch(`${BASE_URL}/admin/orders/${orderId}/invoice`, {
+        method: "POST",
+        credentials: "include",
+      });
+      await errorHandler(response);
+      return await response.json();
+    },
+    getInvites: async () => {
+      const response = await fetch(`${BASE_URL}/admin/invites`, { credentials: "include" });
+      await errorHandler(response);
+      return await response.json();
+    },
+    sendInvite: async (data: { email: string; role: string; companyId?: number }) => {
+      const response = await fetch(`${BASE_URL}/admin/invites`, {
+        method: "POST",
+        credentials: "include",
+        headers: jsonHeaders,
+        body: JSON.stringify(data),
+      });
+      await errorHandler(response);
+      return await response.json();
+    },
+    getCompanyPrices: async (companyId: number) => {
+      const response = await fetch(`${BASE_URL}/admin/company-prices/${companyId}`, { credentials: "include" });
+      await errorHandler(response);
+      return await response.json();
+    },
+    setCompanyPrice: async (data: { companyId: number; productId: number; price: number }) => {
+      const response = await fetch(`${BASE_URL}/admin/company-prices`, {
+        method: "POST",
+        credentials: "include",
+        headers: jsonHeaders,
+        body: JSON.stringify(data),
+      });
+      await errorHandler(response);
+      return await response.json();
+    },
+    deleteCompanyPrice: async (id: number) => {
+      const response = await fetch(`${BASE_URL}/admin/company-prices/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      await errorHandler(response);
+    },
+    getReportSales: async () => {
+      const response = await fetch(`${BASE_URL}/admin/reports/sales`, { credentials: "include" });
+      await errorHandler(response);
+      return await response.json();
+    },
+    getReportCategories: async () => {
+      const response = await fetch(`${BASE_URL}/admin/reports/categories`, { credentials: "include" });
+      await errorHandler(response);
+      return await response.json();
+    },
     uploadProductImage: async (id: number, file: File) => {
       const formData = new FormData();
       formData.append("image", file);

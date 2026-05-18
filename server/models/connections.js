@@ -1,5 +1,5 @@
 const createConnections = (sequelize) => {
-  const { User, Token, Company, Product, Category, CartItem, Order, OrderItem } =
+  const { User, Token, Company, Product, Category, CartItem, Order, OrderItem, Invite, CompanyPrice } =
     sequelize.models;
 
   User.hasOne(Token);
@@ -28,6 +28,17 @@ const createConnections = (sequelize) => {
 
   Product.hasMany(OrderItem);
   OrderItem.belongsTo(Product);
+
+  Company.hasMany(Invite);
+  Invite.belongsTo(Company);
+
+  User.hasMany(Invite, { foreignKey: "invitedBy" });
+
+  Company.hasMany(CompanyPrice);
+  CompanyPrice.belongsTo(Company);
+
+  Product.hasMany(CompanyPrice);
+  CompanyPrice.belongsTo(Product);
 };
 
 module.exports = createConnections;

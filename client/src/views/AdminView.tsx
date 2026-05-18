@@ -16,6 +16,16 @@ const AdminView = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingId, setUploadingId] = useState<number | null>(null);
   const [expandedCompany, setExpandedCompany] = useState<number | null>(null);
+  const [invites, setInvites] = useState<any[]>([]);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState('buyer');
+  const [inviteCompanyId, setInviteCompanyId] = useState('');
+  const [companyPrices, setCompanyPrices] = useState<any[]>([]);
+  const [priceCompanyId, setPriceCompanyId] = useState('');
+  const [priceProductId, setPriceProductId] = useState('');
+  const [priceValue, setPriceValue] = useState('');
+  const [salesReport, setSalesReport] = useState<any>(null);
+  const [catReport, setCatReport] = useState<any>(null);
 
   const [productForm, setProductForm] = useState({
     name: '', slug: '', sku: '', description: '', specs: '',
@@ -33,11 +43,24 @@ const AdminView = () => {
         } else if (activeTab === 'orders') {
           const data = await API.admin.getOrders();
           setOrders(Array.isArray(data) ? data : []);
-        } else if (activeTab === 'products') {
+        } else if (activeTab === 'products' || activeTab === 'prices') {
           const data = await API.admin.getProducts();
           setProducts(data.rows || data.products || (Array.isArray(data) ? data : []));
           const cats = await API.categories.getAll();
           setCategories(Array.isArray(cats) ? cats : cats.value || []);
+          if (activeTab === 'prices') {
+            const comps = await API.admin.getCompanies();
+            setCompanies(Array.isArray(comps) ? comps : []);
+          }
+        } else if (activeTab === 'employees') {
+          const data = await API.admin.getInvites();
+          setInvites(Array.isArray(data) ? data : []);
+          const comps = await API.admin.getCompanies();
+          setCompanies(Array.isArray(comps) ? comps : []);
+        } else if (activeTab === 'reports') {
+          const [s, c] = await Promise.all([API.admin.getReportSales(), API.admin.getReportCategories()]);
+          setSalesReport(s);
+          setCatReport(c);
         }
       } catch (e) {}
       setLoading(false);
@@ -138,12 +161,67 @@ const AdminView = () => {
   };
 
   const statusLabels: any = {
-    new: 'Новый', awaiting_contact: 'Ожидание связи', confirmed: 'Подтверждён',
+    new: 'Новый', awaiting_contact: 'Ожидание связи', awaiting_invoice: 'Ожидает счёта',
+    awaiting_payment: 'Ожидает оплаты', confirmed: 'Подтверждён',
     processing: 'В обработке', shipped: 'Отгружен', delivered: 'Доставлен', cancelled: 'Отменён',
   };
   const statusColors: any = {
-    new: '#D4A853', awaiting_contact: '#FF9800', confirmed: '#2196F3',
+    new: '#D4A853', awaiting_contact: '#FF9800', awaiting_invoice: '#E91E63',
+    awaiting_payment: '#00BCD4', confirmed: '#2196F3',
     processing: '#673AB7', shipped: '#9C27B0', delivered: '#4CAF50', cancelled: '#F44336',
+  };
+
+  const handleGenerateInvoice = async (orderId: number) => {
+    try {
+      await API.admin.generateInvoice(orderId);
+      setOrders(orders.map((o: any) => o.id === orderId ? { ...o, status: 'awaiting_payment' } : o));
+      alert('Счёт сформирован и отправлен клиенту!');
+    } catch (e: any) {
+      alert(e.message || 'Ошибка формирования счёта');
+    }
+  };
+
+  const handleSendInvite = async () => {
+    if (!inviteEmail) return alert('Укажите email');
+    try {
+      const result = await API.admin.sendInvite({
+        email: inviteEmail,
+        role: inviteRole,
+        companyId: inviteCompanyId ? parseInt(inviteCompanyId) : undefined,
+      });
+      setInviteEmail('');
+      alert(`Приглашение отправлено!\n${result.inviteLink || ''}`);
+      const data = await API.admin.getInvites();
+      setInvites(Array.isArray(data) ? data : []);
+    } catch (e: any) {
+      alert(e.message || 'Ошибка');
+    }
+  };
+
+  const handleLoadCompanyPrices = async (companyId: string) => {
+    setPriceCompanyId(companyId);
+    if (!companyId) { setCompanyPrices([]); return; }
+    try {
+      const data = await API.admin.getCompanyPrices(parseInt(companyId));
+      setCompanyPrices(Array.isArray(data) ? data : []);
+    } catch (e) { setCompanyPrices([]); }
+  };
+
+  const handleAddCompanyPrice = async () => {
+    if (!priceCompanyId || !priceProductId || !priceValue) return alert('Заполните все поля');
+    try {
+      await API.admin.setCompanyPrice({ companyId: parseInt(priceCompanyId), productId: parseInt(priceProductId), price: parseFloat(priceValue) });
+      setPriceValue('');
+      setPriceProductId('');
+      handleLoadCompanyPrices(priceCompanyId);
+    } catch (e: any) { alert(e.message || 'Ошибка'); }
+  };
+
+  const handleDeleteCompanyPrice = async (id: number) => {
+    try {
+      await API.admin.deleteCompanyPrice(id);
+      handleLoadCompanyPrices(priceCompanyId);
+    } catch (e) {}
   };
 
   if (!user || !user.isSystemAdmin) {
@@ -171,6 +249,9 @@ const AdminView = () => {
             <button className={`admin-nav-item ${activeTab === 'orders' ? 'active' : ''}`} onClick={() => setActiveTab('orders')}>{'\uD83D\uDCE6'} Заказы</button>
             <button className={`admin-nav-item ${activeTab === 'products' ? 'active' : ''}`} onClick={() => setActiveTab('products')}>{'\uD83D\uDED2'} Товары</button>
             <button className={`admin-nav-item ${activeTab === 'companies' ? 'active' : ''}`} onClick={() => setActiveTab('companies')}>{'\uD83C\uDFE2'} Компании</button>
+            <button className={`admin-nav-item ${activeTab === 'employees' ? 'active' : ''}`} onClick={() => setActiveTab('employees')}>{'\uD83D\uDC65'} Сотрудники</button>
+            <button className={`admin-nav-item ${activeTab === 'prices' ? 'active' : ''}`} onClick={() => setActiveTab('prices')}>{'\uD83D\uDCB0'} Персон. цены</button>
+            <button className={`admin-nav-item ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => setActiveTab('reports')}>{'\uD83D\uDCCA'} Отчёты</button>
           </div>
         </aside>
 
@@ -335,16 +416,25 @@ const AdminView = () => {
                         </td>
                         <td style={{fontSize: 13}}>{formatDate(o.createdAt)}</td>
                         <td>
-                          <select value={o.status} onChange={(e) => handleUpdateOrderStatus(o.id, e.target.value)}
-                            style={{padding: '5px 8px', fontSize: 12, borderRadius: 4, border: '1px solid var(--border)', background: 'white'}}>
-                            <option value="new">Новый</option>
-                            <option value="awaiting_contact">Ожидание связи</option>
-                            <option value="confirmed">Подтверждён</option>
-                            <option value="processing">В обработке</option>
-                            <option value="shipped">Отгружен</option>
-                            <option value="delivered">Доставлен</option>
-                            <option value="cancelled">Отменён</option>
-                          </select>
+                          <div style={{display: 'flex', flexDirection: 'column', gap: 6}}>
+                            <select value={o.status} onChange={(e) => handleUpdateOrderStatus(o.id, e.target.value)}
+                              style={{padding: '5px 8px', fontSize: 12, borderRadius: 4, border: '1px solid var(--border)', background: 'white'}}>
+                              <option value="new">Новый</option>
+                              <option value="awaiting_contact">Ожидание связи</option>
+                              <option value="awaiting_invoice">Ожидает счёта</option>
+                              <option value="awaiting_payment">Ожидает оплаты</option>
+                              <option value="confirmed">Подтверждён</option>
+                              <option value="processing">В обработке</option>
+                              <option value="shipped">Отгружен</option>
+                              <option value="delivered">Доставлен</option>
+                              <option value="cancelled">Отменён</option>
+                            </select>
+                            {(o.status === 'awaiting_invoice' || o.status === 'confirmed') && (
+                              <button className="btn btn-primary" style={{fontSize: 11, padding: '4px 10px'}} onClick={() => handleGenerateInvoice(o.id)}>
+                                {'\uD83D\uDCC4'} Сформировать счёт
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -476,6 +566,224 @@ const AdminView = () => {
                   </tbody>
                 </table>
               )}
+            </div>
+          )}
+          {/* ===== EMPLOYEES TAB ===== */}
+          {activeTab === 'employees' && (
+            <div className="card" style={{padding: 28}}>
+              <div className="admin-table-header">
+                <h2 style={{fontSize: 20, fontWeight: 700}}>{'\uD83D\uDC65'} Управление сотрудниками</h2>
+              </div>
+
+              <div style={{background: 'var(--bg-main)', borderRadius: 12, padding: 20, marginBottom: 24, border: '1px solid var(--border)'}}>
+                <h3 style={{fontSize: 15, fontWeight: 700, marginBottom: 12}}>Пригласить сотрудника</h3>
+                <div style={{display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end'}}>
+                  <div className="form-group" style={{flex: 1, minWidth: 200, marginBottom: 0}}>
+                    <label style={{fontSize: 12}}>Email</label>
+                    <input className="form-control" type="email" placeholder="email@company.ru" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} />
+                  </div>
+                  <div className="form-group" style={{minWidth: 180, marginBottom: 0}}>
+                    <label style={{fontSize: 12}}>Роль</label>
+                    <select className="form-control" value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}>
+                      <option value="buyer">Менеджер закупок</option>
+                      <option value="accountant">Бухгалтер</option>
+                    </select>
+                  </div>
+                  <div className="form-group" style={{minWidth: 200, marginBottom: 0}}>
+                    <label style={{fontSize: 12}}>Компания</label>
+                    <select className="form-control" value={inviteCompanyId} onChange={(e) => setInviteCompanyId(e.target.value)}>
+                      <option value="">— Выберите —</option>
+                      {companies.filter((c: any) => c.status === 'approved').map((c: any) => (
+                        <option key={c.id} value={c.id}>{c.companyName}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button className="btn btn-primary" style={{padding: '10px 24px', whiteSpace: 'nowrap'}} onClick={handleSendInvite}>
+                    {'\u2709\uFE0F'} Отправить приглашение
+                  </button>
+                </div>
+              </div>
+
+              {loading ? <div className="loading-spinner"></div> : invites.length === 0 ? (
+                <div className="empty-state"><div className="empty-state-icon">{'\uD83D\uDC65'}</div><h3>Нет приглашений</h3><p>Приглашения сотрудников появятся здесь</p></div>
+              ) : (
+                <table className="orders-table" style={{fontSize: 13}}>
+                  <thead><tr><th>Email</th><th>Роль</th><th>Статус</th><th>Дата</th></tr></thead>
+                  <tbody>
+                    {invites.map((inv: any) => (
+                      <tr key={inv.id}>
+                        <td style={{fontWeight: 600}}>{inv.email}</td>
+                        <td>{inv.role === 'accountant' ? 'Бухгалтер' : 'Менеджер закупок'}</td>
+                        <td>
+                          <span className={`badge ${inv.status === 'accepted' ? 'badge-success' : 'badge-warning'}`}>
+                            {inv.status === 'accepted' ? 'Принято' : 'Ожидает'}
+                          </span>
+                        </td>
+                        <td>{new Date(inv.createdAt).toLocaleDateString('ru-RU')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
+          {/* ===== PERSONALIZED PRICES TAB ===== */}
+          {activeTab === 'prices' && (
+            <div className="card" style={{padding: 28}}>
+              <div className="admin-table-header">
+                <h2 style={{fontSize: 20, fontWeight: 700}}>{'\uD83D\uDCB0'} Персональные цены</h2>
+              </div>
+
+              <div style={{marginBottom: 20}}>
+                <label style={{fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 6}}>Выберите компанию:</label>
+                <select className="form-control" style={{maxWidth: 400}} value={priceCompanyId} onChange={(e) => handleLoadCompanyPrices(e.target.value)}>
+                  <option value="">— Выберите компанию —</option>
+                  {companies.filter((c: any) => c.status === 'approved').map((c: any) => (
+                    <option key={c.id} value={c.id}>{c.companyName} (ИНН: {c.inn})</option>
+                  ))}
+                </select>
+              </div>
+
+              {priceCompanyId && (
+                <>
+                  <div style={{background: 'var(--bg-main)', borderRadius: 12, padding: 20, marginBottom: 20, border: '1px solid var(--border)'}}>
+                    <h3 style={{fontSize: 15, fontWeight: 700, marginBottom: 12}}>Добавить спеццену</h3>
+                    <div style={{display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end'}}>
+                      <div className="form-group" style={{flex: 1, minWidth: 250, marginBottom: 0}}>
+                        <label style={{fontSize: 12}}>Товар</label>
+                        <select className="form-control" value={priceProductId} onChange={(e) => setPriceProductId(e.target.value)}>
+                          <option value="">— Выберите товар —</option>
+                          {products.map((p: any) => (
+                            <option key={p.id} value={p.id}>{p.name} ({p.sku}) — {formatPrice(p.basePrice)} {'\u20BD'}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group" style={{minWidth: 120, marginBottom: 0}}>
+                        <label style={{fontSize: 12}}>Спеццена ({'\u20BD'})</label>
+                        <input className="form-control" type="number" value={priceValue} onChange={(e) => setPriceValue(e.target.value)} placeholder="0.00" />
+                      </div>
+                      <button className="btn btn-primary" style={{padding: '10px 20px'}} onClick={handleAddCompanyPrice}>
+                        + Добавить
+                      </button>
+                    </div>
+                  </div>
+
+                  {companyPrices.length === 0 ? (
+                    <p style={{color: 'var(--text-secondary)', fontSize: 14, textAlign: 'center', padding: 20}}>Спеццены для этой компании не заданы</p>
+                  ) : (
+                    <table className="orders-table" style={{fontSize: 13}}>
+                      <thead><tr><th>Товар</th><th>Артикул</th><th>Базовая цена</th><th>Спеццена</th><th>Скидка</th><th></th></tr></thead>
+                      <tbody>
+                        {companyPrices.map((cp: any) => {
+                          const basePrice = cp.Product?.basePrice || 0;
+                          const discount = basePrice > 0 ? Math.round((1 - cp.price / basePrice) * 100) : 0;
+                          return (
+                            <tr key={cp.id}>
+                              <td style={{fontWeight: 600}}>{cp.Product?.name || '—'}</td>
+                              <td>{cp.Product?.sku || '—'}</td>
+                              <td>{formatPrice(basePrice)} {'\u20BD'}</td>
+                              <td style={{fontWeight: 700, color: '#4CAF50'}}>{formatPrice(cp.price)} {'\u20BD'}</td>
+                              <td><span className="badge badge-success">-{discount}%</span></td>
+                              <td><button className="btn btn-outline" style={{fontSize: 11, padding: '4px 10px', color: '#F44336'}} onClick={() => handleDeleteCompanyPrice(cp.id)}>{'\u2716'}</button></td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ===== REPORTS TAB ===== */}
+          {activeTab === 'reports' && (
+            <div>
+              {/* Sales summary */}
+              <div className="card" style={{padding: 28, marginBottom: 20}}>
+                <h2 style={{fontSize: 20, fontWeight: 700, marginBottom: 20}}>{'\uD83D\uDCCA'} Динамика продаж</h2>
+                {loading ? <div className="loading-spinner"></div> : salesReport ? (
+                  <>
+                    <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24}}>
+                      <div style={{background: 'rgba(33,150,243,0.08)', borderRadius: 12, padding: '20px 24px', textAlign: 'center'}}>
+                        <div style={{fontSize: 28, fontWeight: 700, color: '#2196F3'}}>{salesReport.totalOrders}</div>
+                        <div style={{fontSize: 13, color: 'var(--text-secondary)', marginTop: 4}}>Всего заказов</div>
+                      </div>
+                      <div style={{background: 'rgba(76,175,80,0.08)', borderRadius: 12, padding: '20px 24px', textAlign: 'center'}}>
+                        <div style={{fontSize: 28, fontWeight: 700, color: '#4CAF50'}}>{formatPrice(salesReport.totalRevenue)} {'\u20BD'}</div>
+                        <div style={{fontSize: 13, color: 'var(--text-secondary)', marginTop: 4}}>Общая выручка</div>
+                      </div>
+                      <div style={{background: 'rgba(212,168,83,0.08)', borderRadius: 12, padding: '20px 24px', textAlign: 'center'}}>
+                        <div style={{fontSize: 28, fontWeight: 700, color: '#D4A853'}}>{formatPrice(Math.round(salesReport.avgOrder))} {'\u20BD'}</div>
+                        <div style={{fontSize: 13, color: 'var(--text-secondary)', marginTop: 4}}>Средний чек</div>
+                      </div>
+                    </div>
+
+                    {salesReport.sales && salesReport.sales.length > 0 && (
+                      <>
+                        <h3 style={{fontSize: 15, fontWeight: 700, marginBottom: 12}}>По месяцам</h3>
+                        <table className="orders-table" style={{fontSize: 13}}>
+                          <thead><tr><th>Месяц</th><th>Заказов</th><th>Выручка</th></tr></thead>
+                          <tbody>
+                            {salesReport.sales.map((s: any) => (
+                              <tr key={s.month}>
+                                <td style={{fontWeight: 600}}>{s.month}</td>
+                                <td>{s.orderCount}</td>
+                                <td style={{fontWeight: 700}}>{formatPrice(parseFloat(s.totalRevenue) || 0)} {'\u20BD'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </>
+                    )}
+                  </>
+                ) : <p style={{color: 'var(--text-secondary)'}}>Нет данных</p>}
+              </div>
+
+              {/* Categories and products */}
+              <div className="card" style={{padding: 28}}>
+                <h2 style={{fontSize: 20, fontWeight: 700, marginBottom: 20}}>{'\uD83C\uDFC6'} Популярные категории и товары</h2>
+                {loading ? <div className="loading-spinner"></div> : catReport ? (
+                  <>
+                    {catReport.categories && catReport.categories.length > 0 && (
+                      <div style={{marginBottom: 24}}>
+                        <h3 style={{fontSize: 15, fontWeight: 700, marginBottom: 12}}>Топ категорий</h3>
+                        <div style={{display: 'flex', gap: 12, flexWrap: 'wrap'}}>
+                          {catReport.categories.map((c: any, idx: number) => (
+                            <div key={idx} style={{background: 'var(--bg-main)', borderRadius: 10, padding: '14px 20px', minWidth: 160, flex: '1 1 160px'}}>
+                              <div style={{fontWeight: 700, fontSize: 14}}>{c.name}</div>
+                              <div style={{fontSize: 12, color: 'var(--text-secondary)', marginTop: 4}}>{c.totalQty} шт. продано</div>
+                              <div style={{fontSize: 13, fontWeight: 700, color: '#4CAF50', marginTop: 4}}>{formatPrice(Math.round(c.totalRevenue))} {'\u20BD'}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {catReport.topProducts && catReport.topProducts.length > 0 && (
+                      <>
+                        <h3 style={{fontSize: 15, fontWeight: 700, marginBottom: 12}}>Топ-20 товаров</h3>
+                        <table className="orders-table" style={{fontSize: 13}}>
+                          <thead><tr><th>#</th><th>Товар</th><th>Артикул</th><th>Категория</th><th>Продано</th><th>Выручка</th></tr></thead>
+                          <tbody>
+                            {catReport.topProducts.map((p: any, idx: number) => (
+                              <tr key={p.productId}>
+                                <td style={{fontWeight: 700, color: 'var(--accent)'}}>{idx + 1}</td>
+                                <td style={{fontWeight: 600}}>{p.name}</td>
+                                <td>{p.sku}</td>
+                                <td>{p.category || '—'}</td>
+                                <td>{p.totalQty} шт.</td>
+                                <td style={{fontWeight: 700}}>{formatPrice(Math.round(p.totalRevenue))} {'\u20BD'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </>
+                    )}
+                  </>
+                ) : <p style={{color: 'var(--text-secondary)'}}>Нет данных</p>}
+              </div>
             </div>
           )}
         </div>
