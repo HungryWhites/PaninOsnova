@@ -3,6 +3,7 @@ const {getDb} = require("./db");
 
 module.exports = {
     getUserIdByToken: async (token) => {
+        if (!token) return null;
         const result = await getDb().models.Token.findOne({where: {token}});
         return result?.UserId;
     },
