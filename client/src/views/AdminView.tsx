@@ -58,9 +58,9 @@ const AdminView = () => {
           const comps = await API.admin.getCompanies();
           setCompanies(Array.isArray(comps) ? comps : []);
         } else if (activeTab === 'reports') {
-          const [s, c] = await Promise.all([API.admin.getReportSales(), API.admin.getReportCategories()]);
-          setSalesReport(s);
-          setCatReport(c);
+          const [s, c] = await Promise.allSettled([API.admin.getReportSales(), API.admin.getReportCategories()]);
+          if (s.status === 'fulfilled') setSalesReport(s.value);
+          if (c.status === 'fulfilled') setCatReport(c.value);
         }
       } catch (e) {}
       setLoading(false);

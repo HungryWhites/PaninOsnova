@@ -337,30 +337,31 @@ adminRouter.get("/reports/sales", async (req, res, next) => {
   try {
     await requireAdmin(req);
     const { getDb } = require("../db/db");
-    const { fn, col, literal } = require("sequelize");
     const Order = getDb().models.Order;
 
-    // Monthly sales for last 12 months (only delivered/paid orders)
-    const deliveredFilter = { status: "delivered" };
-    const sales = await Order.findAll({
-      attributes: [
-        [fn("strftime", "%Y-%m", col("createdAt")), "month"],
-        [fn("COUNT", col("id")), "orderCount"],
-        [fn("SUM", col("totalAmount")), "totalRevenue"],
-      ],
-      where: deliveredFilter,
-      group: [literal("strftime('%Y-%m', createdAt)")],
-      order: [[literal("month"), "DESC"]],
-      limit: 12,
+    // Get all delivered orders
+    const deliveredOrders = await Order.findAll({
+      where: { status: "delivered" },
       raw: true,
     });
 
-    // Summary stats (only delivered orders)
-    const totalOrders = await Order.count({ where: deliveredFilter });
-    const totalRevenue = await Order.sum("totalAmount", { where: deliveredFilter }) || 0;
+    // Compute monthly stats in JS (reliable with SQLite)
+    const monthMap = {};
+    let totalRevenue = 0;
+    for (const order of deliveredOrders) {
+      const date = new Date(order.createdAt);
+      const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+      if (!monthMap[month]) monthMap[month] = { month, orderCount: 0, totalRevenue: 0 };
+      monthMap[month].orderCount++;
+      monthMap[month].totalRevenue += order.totalAmount || 0;
+      totalRevenue += order.totalAmount || 0;
+    }
+
+    const sales = Object.values(monthMap).sort((a, b) => a.month.localeCompare(b.month));
+    const totalOrders = deliveredOrders.length;
     const avgOrder = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
-    res.status(200).json({ sales: sales.reverse(), totalOrders, totalRevenue, avgOrder });
+    res.status(200).json({ sales, totalOrders, totalRevenue, avgOrder });
   } catch (err) {
     next(err);
   }
@@ -370,47 +371,66 @@ adminRouter.get("/reports/categories", async (req, res, next) => {
   try {
     await requireAdmin(req);
     const { getDb } = require("../db/db");
-    const { fn, col } = require("sequelize");
-    const OrderItem = getDb().models.OrderItem;
-
     const Order = getDb().models.Order;
-    const popular = await OrderItem.findAll({
-      attributes: [
-        "ProductId",
-        [fn("SUM", col("OrderItem.quantity")), "totalQty"],
-        [fn("SUM", fn("*", col("OrderItem.quantity"), col("OrderItem.price"))), "totalRevenue"],
-        [fn("COUNT", col("OrderItem.id")), "orderCount"],
-      ],
-      include: [
-        { model: Order, attributes: [], where: { status: "delivered" } },
-        { model: getDb().models.Product, attributes: ["name", "sku", "CategoryId"], include: [{ model: getDb().models.Category, attributes: ["name"] }] },
-      ],
-      group: ["ProductId"],
-      order: [[fn("SUM", col("OrderItem.quantity")), "DESC"]],
-      limit: 20,
-      raw: false,
+    const OrderItem = getDb().models.OrderItem;
+    const Product = getDb().models.Product;
+    const Category = getDb().models.Category;
+
+    // Get delivered order IDs
+    const deliveredOrders = await Order.findAll({
+      where: { status: "delivered" },
+      attributes: ["id"],
+      raw: true,
+    });
+    const deliveredIds = deliveredOrders.map((o) => o.id);
+
+    if (deliveredIds.length === 0) {
+      return res.status(200).json({ topProducts: [], categories: [] });
+    }
+
+    // Get order items for delivered orders
+    const items = await OrderItem.findAll({
+      where: { OrderId: deliveredIds },
+      include: [{ model: Product, include: [{ model: Category }] }],
     });
 
-    // Category stats
+    // Aggregate by product
+    const productMap = {};
+    for (const item of items) {
+      const pid = item.ProductId;
+      if (!productMap[pid]) {
+        productMap[pid] = {
+          productId: pid,
+          name: item.Product?.name || "—",
+          sku: item.Product?.sku || "—",
+          category: item.Product?.Category?.name || "Без категории",
+          categoryId: item.Product?.CategoryId,
+          totalQty: 0,
+          totalRevenue: 0,
+          orderCount: 0,
+        };
+      }
+      productMap[pid].totalQty += item.quantity;
+      productMap[pid].totalRevenue += item.quantity * item.price;
+      productMap[pid].orderCount++;
+    }
+
+    const topProducts = Object.values(productMap)
+      .sort((a, b) => b.totalQty - a.totalQty)
+      .slice(0, 20);
+
+    // Aggregate by category
     const catStats = {};
-    for (const item of popular) {
-      const catName = item.Product?.Category?.name || "Без категории";
+    for (const p of Object.values(productMap)) {
+      const catName = p.category;
       if (!catStats[catName]) catStats[catName] = { name: catName, totalQty: 0, totalRevenue: 0, productCount: 0 };
-      catStats[catName].totalQty += parseInt(item.getDataValue("totalQty")) || 0;
-      catStats[catName].totalRevenue += parseFloat(item.getDataValue("totalRevenue")) || 0;
+      catStats[catName].totalQty += p.totalQty;
+      catStats[catName].totalRevenue += p.totalRevenue;
       catStats[catName].productCount++;
     }
 
     res.status(200).json({
-      topProducts: popular.map((p) => ({
-        productId: p.ProductId,
-        name: p.Product?.name,
-        sku: p.Product?.sku,
-        category: p.Product?.Category?.name,
-        totalQty: parseInt(p.getDataValue("totalQty")) || 0,
-        totalRevenue: parseFloat(p.getDataValue("totalRevenue")) || 0,
-        orderCount: parseInt(p.getDataValue("orderCount")) || 0,
-      })),
+      topProducts,
       categories: Object.values(catStats).sort((a, b) => b.totalRevenue - a.totalRevenue),
     });
   } catch (err) {
