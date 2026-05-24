@@ -340,23 +340,24 @@ adminRouter.get("/reports/sales", async (req, res, next) => {
     const { fn, col, literal } = require("sequelize");
     const Order = getDb().models.Order;
 
-    // Monthly sales for last 12 months
+    // Monthly sales for last 12 months (only delivered/paid orders)
+    const deliveredFilter = { status: "delivered" };
     const sales = await Order.findAll({
       attributes: [
         [fn("strftime", "%Y-%m", col("createdAt")), "month"],
         [fn("COUNT", col("id")), "orderCount"],
         [fn("SUM", col("totalAmount")), "totalRevenue"],
       ],
-      where: { status: { [require("sequelize").Op.notIn]: ["cancelled"] } },
+      where: deliveredFilter,
       group: [literal("strftime('%Y-%m', createdAt)")],
       order: [[literal("month"), "DESC"]],
       limit: 12,
       raw: true,
     });
 
-    // Summary stats
-    const totalOrders = await Order.count({ where: { status: { [require("sequelize").Op.notIn]: ["cancelled"] } } });
-    const totalRevenue = await Order.sum("totalAmount", { where: { status: { [require("sequelize").Op.notIn]: ["cancelled"] } } }) || 0;
+    // Summary stats (only delivered orders)
+    const totalOrders = await Order.count({ where: deliveredFilter });
+    const totalRevenue = await Order.sum("totalAmount", { where: deliveredFilter }) || 0;
     const avgOrder = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
     res.status(200).json({ sales: sales.reverse(), totalOrders, totalRevenue, avgOrder });
@@ -372,16 +373,20 @@ adminRouter.get("/reports/categories", async (req, res, next) => {
     const { fn, col } = require("sequelize");
     const OrderItem = getDb().models.OrderItem;
 
+    const Order = getDb().models.Order;
     const popular = await OrderItem.findAll({
       attributes: [
         "ProductId",
-        [fn("SUM", col("quantity")), "totalQty"],
-        [fn("SUM", fn("*", col("quantity"), col("price"))), "totalRevenue"],
+        [fn("SUM", col("OrderItem.quantity")), "totalQty"],
+        [fn("SUM", fn("*", col("OrderItem.quantity"), col("OrderItem.price"))), "totalRevenue"],
         [fn("COUNT", col("OrderItem.id")), "orderCount"],
       ],
-      include: [{ model: getDb().models.Product, attributes: ["name", "sku", "CategoryId"], include: [{ model: getDb().models.Category, attributes: ["name"] }] }],
+      include: [
+        { model: Order, attributes: [], where: { status: "delivered" } },
+        { model: getDb().models.Product, attributes: ["name", "sku", "CategoryId"], include: [{ model: getDb().models.Category, attributes: ["name"] }] },
+      ],
       group: ["ProductId"],
-      order: [[fn("SUM", col("quantity")), "DESC"]],
+      order: [[fn("SUM", col("OrderItem.quantity")), "DESC"]],
       limit: 20,
       raw: false,
     });
